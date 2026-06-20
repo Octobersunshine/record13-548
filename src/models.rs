@@ -39,6 +39,7 @@ pub struct MatchSegment {
     pub track_start: f64,
     pub track_end: f64,
     pub confidence: f64,
+    pub scale_factor: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
