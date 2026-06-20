@@ -193,29 +193,106 @@ audio: <音频文件>
     "fingerprint_count": 20000,
     "created_at": 1234567890
   },
+{
+  "is_infringing": true,
+  "confidence": 0.91,
+  "matched_track": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "告白气球",
+    "artist": "周杰伦",
+    "duration": 215.0,
+    "fingerprint_count": 32000,
+    "created_at": 1718947200
+  },
   "match_segments": [
     {
-      "query_start": 5.0,
-      "query_end": 25.0,
-      "track_start": 10.0,
-      "track_end": 30.0,
-      "confidence": 0.9,
-      "scale_factor": 1.0
+      "raw_query_start": 4.8,
+      "raw_query_end": 24.9,
+      "query_start": 5.1,
+      "query_end": 24.6,
+      "query_duration": 19.5,
+      "query_start_str": "00:05.10",
+      "query_end_str": "00:24.60",
+      "query_timeline": "00:05 - 00:25",
+
+      "raw_track_start": 9.7,
+      "raw_track_end": 29.9,
+      "track_start": 10.2,
+      "track_end": 29.5,
+      "track_duration": 19.3,
+      "track_start_str": "00:10.20",
+      "track_end_str": "00:29.50",
+      "track_timeline": "00:10 - 00:30",
+
+      "confidence": 0.94,
+      "boundary_confidence": 0.91,
+      "scale_factor": 1.0,
+      "speed_change_description": "原速播放",
+      "matched_points_count": 487,
+      "matched_density": 24.97
     },
     {
-      "query_start": 30.0,
-      "query_end": 45.0,
-      "track_start": 40.0,
-      "track_end": 58.0,
-      "confidence": 0.82,
-      "scale_factor": 1.2
+      "raw_query_start": 29.8,
+      "raw_query_end": 45.3,
+      "query_start": 30.2,
+      "query_end": 44.8,
+      "query_duration": 14.6,
+      "query_start_str": "00:30.20",
+      "query_end_str": "00:44.80",
+      "query_timeline": "00:30 - 00:45",
+
+      "raw_track_start": 42.1,
+      "raw_track_end": 60.2,
+      "track_start": 38.3,
+      "track_end": 55.6,
+      "track_duration": 17.3,
+      "track_start_str": "00:38.30",
+      "track_end_str": "00:55.60",
+      "track_timeline": "00:38 - 00:56",
+
+      "confidence": 0.88,
+      "boundary_confidence": 0.85,
+      "scale_factor": 1.18,
+      "speed_change_description": "加速播放 (约快 18%)",
+      "matched_points_count": 312,
+      "matched_density": 21.37
     }
   ],
-  "processing_time_ms": 250
+
+  "infringement_summary": {
+    "total_infringing_seconds": 34.1,
+    "total_infringing_ratio": 0.54,
+    "merged_timeline": [
+      {
+        "start": 5.1,
+        "end": 24.6,
+        "start_str": "00:05.10",
+        "end_str": "00:24.60",
+        "duration": 19.5
+      },
+      {
+        "start": 30.2,
+        "end": 44.8,
+        "start_str": "00:30.20",
+        "end_str": "00:44.80",
+        "duration": 14.6
+      }
+    ],
+    "max_confidence": 0.94,
+    "dominant_scale_factor": 1.08,
+    "human_readable": "视频中 54.0% 的内容疑似侵权（总时长 34.1秒），匹配曲目《告白气球 - 周杰伦》。\n  侵权时间段：[00:05 → 00:25] (19.5秒) [00:30 → 00:45] (14.6秒)\n  播放速度：原速播放，置信度 91.0%"
+  },
+
+  "processing_time_ms": 385
 }
 ```
 
-> **注意**: `scale_factor != 1.0` 表示检测到了变速处理。例如 `scale_factor: 1.2` 意味着该片段被加速了 20%。
+> **时间戳说明**:
+> - `query_start/query_end`：**视频（上传音频）中的侵权起止秒数**（精修后）
+> - `track_start/track_end`：对应版权曲目中的起止秒数
+> - `scale_factor`：该片段的播放速度倍率，1.0 为原速，>1 为加速，<1 为慢速
+> - `speed_change_description`：人类可读的速度说明，如"加速播放(约快 18%)"
+> - `infringement_summary.merged_timeline`：合并后的所有侵权时间段，直接用于视频进度条标记
 
 ## 使用说明
 

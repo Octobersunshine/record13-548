@@ -1,7 +1,8 @@
-use crate::audio::{fingerprint::Fingerprint, sliding_window_match, extract_segments};
+use crate::audio::{fingerprint::Fingerprint, sliding_window_match, extract_segments, build_timeline_summary, SegmentMatch};
 use crate::errors::{AppError, AppResult};
 use crate::models::{
-    CopyrightTrack, DetectionResult, MatchSegment, current_timestamp,
+    CopyrightTrack, DetectionResult, InfringementSummary, MatchSegment, TimelineRange,
+    current_timestamp, describe_scale_factor, format_seconds, format_seconds_short,
 };
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -230,6 +231,11 @@ impl CopyrightLibrary {
             return Err(AppError::BadRequest("查询音频没有指纹数据".to_string()));
         }
 
+        let query_duration = query_fingerprints
+            .last()
+            .map(|fp| fp.timestamp)
+            .unwrap_or(0.0);
+
         let candidate_tracks = self.find_candidates_enhanced(query_fingerprints);
 
         if candidate_tracks.is_empty() {
@@ -240,10 +246,12 @@ impl CopyrightLibrary {
                 matched_track: None,
                 match_segments: Vec::new(),
                 processing_time_ms,
+                infringement_summary: None,
             });
         }
 
-        let mut best_match: Option<(CopyrightTrack, crate::audio::MatchResult)> = None;
+        let mut best_match: Option<(CopyrightTrack, crate::audio::MatchResult, Vec<SegmentMatch>)> =
+            None;
 
         for (track_id, _score) in candidate_tracks {
             let result_opt = {
@@ -265,23 +273,54 @@ impl CopyrightLibrary {
                     };
 
                     let match_result = sliding_window_match(query_fingerprints, &track_fps);
-                    Some((track_info, match_result))
+                    let segments =
+                        extract_segments(&match_result.consistent_pairs, match_result.scale_factor);
+                    Some((track_info, match_result, segments))
                 } else {
                     None
                 }
             };
 
-            if let Some((track_info, match_result)) = result_opt {
-                let confidence = match_result.confidence;
+            if let Some((track_info, match_result, segments)) = result_opt {
+                let match_conf = match_result.confidence;
+                let segment_score = if segments.is_empty() {
+                    0.0
+                } else {
+                    segments
+                        .iter()
+                        .map(|s| s.confidence * (s.query_end - s.query_start))
+                        .sum::<f64>()
+                        / segments
+                            .iter()
+                            .map(|s| (s.query_end - s.query_start).max(0.1))
+                            .sum::<f64>()
+                };
+                let combined_conf = (match_conf * 0.5 + segment_score * 0.5).min(1.0);
 
-                if confidence > self.confidence_threshold {
+                if combined_conf > self.confidence_threshold {
                     let is_better = match &best_match {
-                        Some((_, best)) => confidence > best.confidence,
+                        Some((_, best_mr, best_segs)) => {
+                            let best_seg_score = if best_segs.is_empty() {
+                                0.0
+                            } else {
+                                best_segs
+                                    .iter()
+                                    .map(|s| s.confidence * (s.query_end - s.query_start))
+                                    .sum::<f64>()
+                                    / best_segs
+                                        .iter()
+                                        .map(|s| (s.query_end - s.query_start).max(0.1))
+                                        .sum::<f64>()
+                            };
+                            let best_combined =
+                                (best_mr.confidence * 0.5 + best_seg_score * 0.5).min(1.0);
+                            combined_conf > best_combined
+                        }
                         None => true,
                     };
 
                     if is_better {
-                        best_match = Some((track_info, match_result));
+                        best_match = Some((track_info, match_result, segments));
                     }
                 }
             }
@@ -289,18 +328,47 @@ impl CopyrightLibrary {
 
         let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
-        let (matched_track, match_segments, final_confidence) = match best_match {
-            Some((track, mr)) => {
-                let segments = extract_segments(&mr.consistent_pairs, mr.scale_factor);
+        match best_match {
+            Some((track, mr, segments)) => {
                 let model_segments: Vec<MatchSegment> = segments
                     .iter()
-                    .map(|s| MatchSegment {
-                        query_start: s.query_start,
-                        query_end: s.query_end,
-                        track_start: s.target_start,
-                        track_end: s.target_end,
-                        confidence: s.confidence,
-                        scale_factor: s.scale_factor,
+                    .map(|s| {
+                        let q_dur = s.query_end - s.query_start;
+                        let t_dur = s.target_end - s.target_start;
+                        MatchSegment {
+                            raw_query_start: s.raw_query_start,
+                            raw_query_end: s.raw_query_end,
+                            query_start: s.query_start,
+                            query_end: s.query_end,
+                            query_duration: q_dur,
+                            query_start_str: format_seconds(s.query_start),
+                            query_end_str: format_seconds(s.query_end),
+                            query_timeline: format!(
+                                "{} - {}",
+                                format_seconds_short(s.query_start),
+                                format_seconds_short(s.query_end)
+                            ),
+
+                            raw_track_start: s.raw_target_start,
+                            raw_track_end: s.raw_target_end,
+                            track_start: s.target_start,
+                            track_end: s.target_end,
+                            track_duration: t_dur,
+                            track_start_str: format_seconds(s.target_start),
+                            track_end_str: format_seconds(s.target_end),
+                            track_timeline: format!(
+                                "{} - {}",
+                                format_seconds_short(s.target_start),
+                                format_seconds_short(s.target_end)
+                            ),
+
+                            confidence: s.confidence,
+                            boundary_confidence: s.boundary_confidence,
+                            scale_factor: s.scale_factor,
+                            speed_change_description: describe_scale_factor(s.scale_factor),
+                            matched_points_count: s.matched_points_count,
+                            matched_density: s.matched_density,
+                        }
                     })
                     .collect();
 
@@ -314,22 +382,103 @@ impl CopyrightLibrary {
                         / model_segments.len() as f64
                 };
 
-                let merged_conf = (mr.confidence * 0.6 + avg_seg_conf * 0.4).min(1.0);
+                let merged_conf = (mr.confidence * 0.5 + avg_seg_conf * 0.5).min(1.0);
 
-                (Some(track), model_segments, merged_conf)
+                let track_duration = track.duration;
+                let (total_infringing_seconds, infringement_ratio, max_conf, timeline_ranges) =
+                    build_timeline_summary(&segments, query_duration, track_duration);
+
+                let merged_timeline: Vec<TimelineRange> = timeline_ranges
+                    .iter()
+                    .map(|&(s, e)| TimelineRange {
+                        start: s,
+                        end: e,
+                        start_str: format_seconds(s),
+                        end_str: format_seconds(e),
+                        duration: e - s,
+                    })
+                    .collect();
+
+                let dominant_scale = if segments.is_empty() {
+                    1.0
+                } else {
+                    let weighted_sum: f64 = segments
+                        .iter()
+                        .map(|s| s.scale_factor * s.matched_points_count as f64)
+                        .sum();
+                    let total_weight: f64 = segments
+                        .iter()
+                        .map(|s| s.matched_points_count as f64)
+                        .sum();
+                    if total_weight > 0.0 {
+                        weighted_sum / total_weight
+                    } else {
+                        1.0
+                    }
+                };
+
+                let human_readable = if merged_timeline.is_empty() {
+                    format!(
+                        "检测到匹配《{} - {}》，置信度 {:.1}%",
+                        track.title,
+                        track.artist,
+                        merged_conf * 100.0
+                    )
+                } else {
+                    let ranges_str: Vec<String> = merged_timeline
+                        .iter()
+                        .map(|r| {
+                            format!(
+                                "[{} → {}] ({:.1}秒)",
+                                format_seconds_short(r.start),
+                                format_seconds_short(r.end),
+                                r.duration
+                            )
+                        })
+                        .collect();
+                    format!(
+                        "视频中 {:.1}% 的内容疑似侵权（总时长 {:.1}秒），匹配曲目《{} - {}》。\n  侵权时间段：{}\n  播放速度：{}，置信度 {:.1}%",
+                        infringement_ratio * 100.0,
+                        total_infringing_seconds,
+                        track.title,
+                        track.artist,
+                        ranges_str.join(" "),
+                        describe_scale_factor(dominant_scale),
+                        merged_conf * 100.0
+                    )
+                };
+
+                let summary = if !model_segments.is_empty() {
+                    Some(InfringementSummary {
+                        total_infringing_seconds,
+                        total_infringing_ratio: infringement_ratio,
+                        merged_timeline,
+                        max_confidence: (max_conf.max(merged_conf)).min(1.0),
+                        dominant_scale_factor: dominant_scale,
+                        human_readable,
+                    })
+                } else {
+                    None
+                };
+
+                Ok(DetectionResult {
+                    is_infringing: true,
+                    confidence: merged_conf,
+                    matched_track: Some(track),
+                    match_segments: model_segments,
+                    processing_time_ms,
+                    infringement_summary: summary,
+                })
             }
-            None => (None, Vec::new(), 0.0),
-        };
-
-        let is_infringing = matched_track.is_some();
-
-        Ok(DetectionResult {
-            is_infringing,
-            confidence: final_confidence,
-            matched_track,
-            match_segments,
-            processing_time_ms,
-        })
+            None => Ok(DetectionResult {
+                is_infringing: false,
+                confidence: 0.0,
+                matched_track: None,
+                match_segments: Vec::new(),
+                processing_time_ms,
+                infringement_summary: None,
+            }),
+        }
     }
 
     fn find_candidates_enhanced(&self, query_fingerprints: &[Fingerprint]) -> Vec<(Uuid, f64)> {
