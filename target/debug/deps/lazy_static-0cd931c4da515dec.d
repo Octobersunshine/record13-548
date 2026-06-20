@@ -1,0 +1,8 @@
+E:\temp\record13\548\target\debug\deps\lazy_static-0cd931c4da515dec.d: D:\ProgramFiles\Rust\cargo_home\registry\src\index.crates.io-1949cf8c6b5b557f\lazy_static-1.5.0\src\lib.rs D:\ProgramFiles\Rust\cargo_home\registry\src\index.crates.io-1949cf8c6b5b557f\lazy_static-1.5.0\src\inline_lazy.rs
+
+E:\temp\record13\548\target\debug\deps\liblazy_static-0cd931c4da515dec.rlib: D:\ProgramFiles\Rust\cargo_home\registry\src\index.crates.io-1949cf8c6b5b557f\lazy_static-1.5.0\src\lib.rs D:\ProgramFiles\Rust\cargo_home\registry\src\index.crates.io-1949cf8c6b5b557f\lazy_static-1.5.0\src\inline_lazy.rs
+
+E:\temp\record13\548\target\debug\deps\liblazy_static-0cd931c4da515dec.rmeta: D:\ProgramFiles\Rust\cargo_home\registry\src\index.crates.io-1949cf8c6b5b557f\lazy_static-1.5.0\src\lib.rs D:\ProgramFiles\Rust\cargo_home\registry\src\index.crates.io-1949cf8c6b5b557f\lazy_static-1.5.0\src\inline_lazy.rs
+
+D:\ProgramFiles\Rust\cargo_home\registry\src\index.crates.io-1949cf8c6b5b557f\lazy_static-1.5.0\src\lib.rs:
+D:\ProgramFiles\Rust\cargo_home\registry\src\index.crates.io-1949cf8c6b5b557f\lazy_static-1.5.0\src\inline_lazy.rs:

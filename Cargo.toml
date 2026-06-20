@@ -1,0 +1,29 @@
+[package]
+name = "audio-copyright-detector"
+version = "0.1.0"
+edition = "2021"
+description = "短视频音频版权检测系统 - Rust + Axum 实现"
+
+[dependencies]
+axum = { version = "0.7", features = ["multipart"] }
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+anyhow = "1.0"
+thiserror = "1.0"
+futures = "0.3"
+bytes = "1.0"
+parking_lot = "0.12"
+rustfft = "6.1"
+hound = "3.5"
+symphonia = { version = "0.5", features = ["mp3", "wav", "aac", "isomp4"] }
+tempfile = "3.0"
+base64 = "0.22"
+
+[profile.release]
+opt-level = 3
+lto = true
